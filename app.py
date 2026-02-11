@@ -13,6 +13,16 @@
 #   AZURE_DEPLOYMENT="gpt-5-mini"
 # -----------------------------------------------------------------------------
 
+# ── SQLite-Fix für Streamlit Cloud (muss VOR chromadb-Import stehen) ──
+# Streamlit Cloud hat oft ein zu altes System-SQLite; pysqlite3-binary
+# liefert eine aktuelle Version. Lokal wird das automatisch übersprungen.
+try:
+    __import__("pysqlite3")
+    import sys
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass  # lokal nicht nötig
+
 from __future__ import annotations
 
 import os
