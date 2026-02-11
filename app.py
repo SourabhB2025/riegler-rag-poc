@@ -472,14 +472,29 @@ def build_context_payload(results: List[Dict[str, Any]]) -> str:
 # 7) Azure OpenAI Antwort
 # =============================================================================
 
+def _get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
+    """Liest einen Secret-Wert: zuerst st.secrets (Streamlit Cloud),
+    dann os.getenv (lokale .env / Umgebungsvariablen)."""
+    try:
+        return st.secrets[key]
+    except (KeyError, FileNotFoundError):
+        return os.getenv(key, default)
+
+
 @st.cache_resource(show_spinner=False)
 def load_azure_client():
+    # Lokale .env laden (harmlos wenn nicht vorhanden)
     load_dotenv(dotenv_path=APP_ROOT / ".env")
-    endpoint = os.getenv("AZURE_ENDPOINT")
-    key = os.getenv("AZURE_OPENAI_API_KEY")
-    deployment = os.getenv("AZURE_DEPLOYMENT", "gpt-5-mini")
+
+    endpoint = _get_secret("AZURE_ENDPOINT")
+    key = _get_secret("AZURE_OPENAI_API_KEY")
+    deployment = _get_secret("AZURE_DEPLOYMENT", "gpt-5-mini")
+
     if not endpoint or not key:
-        raise RuntimeError("AZURE_ENDPOINT oder AZURE_OPENAI_API_KEY fehlt in .env")
+        raise RuntimeError(
+            "AZURE_ENDPOINT oder AZURE_OPENAI_API_KEY fehlt.\n"
+            "Lokal: .env Datei anlegen  |  Cloud: Streamlit Secrets UI verwenden."
+        )
     client = OpenAI(base_url=endpoint, api_key=key)
     return client, deployment
 
