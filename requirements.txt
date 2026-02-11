@@ -1,0 +1,9 @@
+streamlit>=1.36
+chromadb>=0.5
+sentence-transformers>=3.0
+rank-bm25>=0.2.2
+openai>=1.40
+python-dotenv>=1.0
+pandas>=2.0
+numpy>=1.24
+
