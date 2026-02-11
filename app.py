@@ -12,6 +12,7 @@
 #   AZURE_OPENAI_API_KEY="..."
 #   AZURE_DEPLOYMENT="gpt-5-mini"
 # -----------------------------------------------------------------------------
+from __future__ import annotations
 
 # ── SQLite-Fix für Streamlit Cloud (muss VOR chromadb-Import stehen) ──
 # Streamlit Cloud hat oft ein zu altes System-SQLite; pysqlite3-binary
@@ -22,8 +23,6 @@ try:
     sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 except ImportError:
     pass  # lokal nicht nötig
-
-from __future__ import annotations
 
 import os
 import re
