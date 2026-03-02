@@ -80,13 +80,13 @@ DEFAULT_USE_RERANK = True
 # Entwickler-Panel: True = sichtbar, False = ausgeblendet
 ENABLE_DEV_PANEL = True
 
-# Bilder-Karten: True = Produktkarten mit Bildern anzeigen, False = komplett versteckt
-ENABLE_IMAGES = True
+# Bilder-Karten: main = minimal ohne Bilder; dev-Branch hat ENABLE_IMAGES = True
+ENABLE_IMAGES = False
 
-# Bilder: Thumbnail-Auflösung
-PREFER_LOCAL_IMAGES = True
-LOCAL_IMAGES_DIR = APP_ROOT / "data" / "images"
-LOCAL_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
+# --- IMAGE (dev): Bild-Pfade nur auf dev-Branch aktiv ---
+# PREFER_LOCAL_IMAGES = True
+# LOCAL_IMAGES_DIR = APP_ROOT / "data" / "images"
+# LOCAL_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp"]
 
 # Produkt-Dokumente (JSON + MD)
 PRODUCTS_DIR = APP_ROOT / "data" / "products"
@@ -181,28 +181,13 @@ PAGE_CSS = """
 </style>
 """
 
-# CSS für die Produktkarten (wird im iframe via components.html eingebettet)
-CARD_IFRAME_CSS = """
-body { margin:0; padding:0; background:transparent; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; color:#e6edf6; }
-.cards-title { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#9aa4b2; margin:0 0 8px 4px; }
-.card-row { display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; }
-.card-row::-webkit-scrollbar { height:8px; }
-.card-row::-webkit-scrollbar-thumb { background:#2b3440; border-radius:999px; }
-.pcard { min-width:210px; max-width:210px; border:1px solid #2b3440; border-radius:12px; overflow:hidden; background:#0b1220; flex-shrink:0; }
-.pimg { height:120px; overflow:hidden; background:#111827; display:flex; align-items:center; justify-content:center; }
-.pimg img { width:100%; height:100%; object-fit:cover; }
-.pbody { padding:10px; display:flex; flex-direction:column; gap:6px; }
-.ptitle { font-size:13px; font-weight:800; color:#e6edf6; line-height:1.25;
-          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.pmeta { font-size:12px; color:#b6c0cd; }
-.badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
-         background:rgba(96,165,250,0.12); color:#93c5fd; border:1px solid rgba(96,165,250,0.25); }
-.psnip { font-size:12px; color:#c7d0dd; line-height:1.35;
-         display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.plinks { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
-.plink { font-size:12px; color:#60a5fa; text-decoration:none; }
-.plink:hover { text-decoration:underline; }
-"""
+# --- IMAGE (dev): Karten-CSS nur auf dev-Branch (keine Produktkarten/Images auf main) ---
+# CARD_IFRAME_CSS = """
+# body { margin:0; padding:0; ... }
+# .pcard { ... }
+# .pimg { ... }
+# """
+CARD_IFRAME_CSS = ""
 
 
 # =============================================================================
@@ -217,37 +202,12 @@ def safe_url(url: str) -> str:
 def esc(s: Any) -> str:
     return html.escape("" if s is None else str(s))
 
-def bytes_to_data_uri(img_bytes: bytes, mime: str) -> str:
-    b64 = base64.b64encode(img_bytes).decode("utf-8")
-    return f"data:{mime};base64,{b64}"
-
-def detect_mime(path: Path) -> str:
-    ext = path.suffix.lower()
-    if ext in [".jpg", ".jpeg"]:
-        return "image/jpeg"
-    if ext == ".png":
-        return "image/png"
-    if ext == ".webp":
-        return "image/webp"
-    return "application/octet-stream"
-
-def placeholder_data_uri(text: str = "Riegler") -> str:
-    txt = esc(text)[:24]
-    svg = f"""
-    <svg xmlns='http://www.w3.org/2000/svg' width='420' height='220'>
-      <defs>
-        <linearGradient id='g' x1='0' x2='1'>
-          <stop offset='0' stop-color='#0b1220'/>
-          <stop offset='1' stop-color='#111827'/>
-        </linearGradient>
-      </defs>
-      <rect width='100%' height='100%' fill='url(#g)'/>
-      <rect x='18' y='18' width='384' height='184' rx='18' fill='#0b1220' stroke='#2b3440'/>
-      <text x='210' y='120' font-family='Segoe UI, Arial' font-size='26' fill='#93c5fd' text-anchor='middle'>{txt}</text>
-      <text x='210' y='150' font-family='Segoe UI, Arial' font-size='14' fill='#9aa4b2' text-anchor='middle'>kein Bild</text>
-    </svg>
-    """.strip().encode("utf-8")
-    return bytes_to_data_uri(svg, "image/svg+xml")
+# --- IMAGE (dev): nur für Produktbilder/Karten auf dev ---
+# def bytes_to_data_uri(img_bytes: bytes, mime: str) -> str:
+#     b64 = base64.b64encode(img_bytes).decode("utf-8")
+#     return f"data:{mime};base64,{b64}"
+# def detect_mime(path: Path) -> str: ...
+# def placeholder_data_uri(text: str = "Riegler") -> str: ...
 
 def _logo_b64() -> Optional[str]:
     """Gibt das Logo als base64-String zurück (oder None)."""
@@ -260,26 +220,10 @@ def _logo_b64() -> Optional[str]:
 # 4) Datenzugriff (später durch S3/Blob/DB ersetzen)
 # =============================================================================
 
-class ImageResolver:
-    def __init__(self, prefer_local: bool, local_dir: Path):
-        self.prefer_local = prefer_local
-        self.local_dir = local_dir
-
-    def resolve(self, meta: Dict[str, Any]) -> str:
-        product_id = str(meta.get("product_id") or "").strip()
-        remote = safe_url(str(meta.get("image_url") or ""))
-
-        if self.prefer_local and product_id:
-            for ext in LOCAL_IMAGE_EXTS:
-                p = self.local_dir / f"{product_id}{ext}"
-                if p.exists() and p.is_file():
-                    img_bytes = p.read_bytes()
-                    return bytes_to_data_uri(img_bytes, detect_mime(p))
-
-        if remote:
-            return remote
-
-        return placeholder_data_uri(product_id or "Riegler")
+# --- IMAGE (dev): ImageResolver für Produktbilder nur auf dev ---
+# class ImageResolver:
+#     def __init__(self, prefer_local: bool, local_dir: Path): ...
+#     def resolve(self, meta: Dict[str, Any]) -> str: ...
 
 
 class DocumentResolver:
@@ -463,7 +407,7 @@ def build_context_payload(results: List[Dict[str, Any]]) -> str:
             f"Kategorie: {m.get('category')}" if m.get("category") else None,
             f"Preis: {m.get('price')} {m.get('currency') or ''}".strip() if m.get("price") else None,
             f"Shop-URL: {m.get('url')}" if m.get("url") else None,
-            f"Bild-URL: {m.get('image_url')}" if m.get("image_url") else None,
+            # --- IMAGE (dev): Bild-URL für LLM-Kontext auf dev ---
             f"PDF-URL: {m.get('pdf_url')}" if m.get("pdf_url") else None,
         ]
         card_lines = [x for x in card_lines if x]
@@ -594,56 +538,36 @@ def render_sidebar_logo():
         st.markdown(f"**{APP_TITLE}**")
 
 
-def build_cards_html(hits: List[Dict[str, Any]], img_resolver: ImageResolver) -> Optional[str]:
-    """Baut den vollständigen HTML-String für die Produktkarten.
-    Gibt None zurück wenn keine Treffer vorhanden oder ENABLE_IMAGES = False."""
-    if not ENABLE_IMAGES:
+def build_cards_html(hits: List[Dict[str, Any]], img_resolver: Any = None) -> Optional[str]:
+    """Produktkarten-HTML nur auf dev (ENABLE_IMAGES=True). Main: keine Karten/Images."""
+    if not ENABLE_IMAGES or not hits:
         return None
-    if not hits:
-        return None
+    # --- IMAGE (dev): rest of card HTML with .pcard/.pimg lives on dev branch ---
+    return None
 
-    cards_html_parts = []
-    for h in hits:
-        m = h.get("metadata") or {}
-        pid = esc(m.get("product_id") or "")
-        name = esc(m.get("name") or pid or "Produkt")
-        price = esc(m.get("price") or "—")
-        cur = esc(m.get("currency") or "")
-        url = safe_url(str(m.get("url") or ""))
-        pdf = safe_url(str(m.get("pdf_url") or ""))
-        img_src = img_resolver.resolve(m)
 
-        snip = esc((h.get("text") or "").replace("\n", " ").strip()[:120] + "…")
-
-        links = []
-        if url:
-            links.append(f"<a class='plink' href='{esc(url)}' target='_blank'>Shop &rarr;</a>")
-        if pdf:
-            links.append(f"<a class='plink' href='{esc(pdf)}' target='_blank'>PDF &rarr;</a>")
-        links_html = "<div class='plinks'>" + " ".join(links) + "</div>" if links else ""
-
-        cards_html_parts.append(f"""
-<div class="pcard">
-  <div class="pimg"><img src="{img_src}" alt="{name}" /></div>
-  <div class="pbody">
-    <div class="ptitle">{name}</div>
-    <div class="pmeta"><span class="badge">ID</span> {pid}</div>
-    <div class="pmeta"><span class="badge">Preis</span> {price} {cur}</div>
-    <div class="psnip">{snip}</div>
-    {links_html}
-  </div>
-</div>""")
-
-    return f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><style>{CARD_IFRAME_CSS}</style></head>
-<body>
-  <div class="cards-title">Top-Referenzen</div>
-  <div class="card-row">
-    {"".join(cards_html_parts)}
-  </div>
-</body>
-</html>"""
+def render_minimal_references(refs: List[Dict[str, Any]]) -> None:
+    """Zeigt Top-Referenzen als einfache Liste (ohne Bilder/Karten)."""
+    if not refs:
+        return
+    st.markdown("**Top-Referenzen**")
+    for r in refs:
+        m = r.get("metadata") or {}
+        pid = m.get("product_id") or ""
+        name = m.get("name") or pid or "Produkt"
+        price = m.get("price") or "—"
+        cur = (m.get("currency") or "").strip()
+        url = (m.get("url") or "").strip()
+        pdf = (m.get("pdf_url") or "").strip()
+        line = f"- **{name}** (ID {pid}) — {price} {cur}".strip()
+        st.markdown(line)
+        if url or pdf:
+            parts = []
+            if url:
+                parts.append(f"[Shop]({url})")
+            if pdf:
+                parts.append(f"[PDF]({pdf})")
+            st.markdown("  " + " | ".join(parts))
 
 
 def build_sources_data(hits: List[Dict[str, Any]], doc_resolver: DocumentResolver) -> List[Dict[str, Any]]:
@@ -662,11 +586,15 @@ def build_sources_data(hits: List[Dict[str, Any]], doc_resolver: DocumentResolve
 
 
 def display_message_extras(msg: Dict[str, Any], msg_idx: int):
-    """Rendert Karten + lokale Quellen die zu einer Nachricht gehören."""
-    # Karten (iframe) — nur wenn ENABLE_IMAGES aktiv
-    cards_html = msg.get("cards_html")
-    if cards_html and ENABLE_IMAGES:
-        components.html(cards_html, height=340, scrolling=False)
+    """Rendert Top-Referenzen (minimal ohne Bilder) + lokale Quellen."""
+    # Minimal: nur Text-Liste; keine Karten/iframe (dev hat ENABLE_IMAGES + cards_html)
+    top_refs = msg.get("top_refs")
+    if top_refs:
+        render_minimal_references(top_refs)
+    # cards_html / iframe nur auf dev
+    # cards_html = msg.get("cards_html")
+    # if cards_html and ENABLE_IMAGES:
+    #     components.html(cards_html, height=340, scrolling=False)
 
     # Lokale Quellen (Expander mit Download-Buttons)
     for src_idx, src in enumerate(msg.get("sources") or []):
@@ -767,7 +695,8 @@ def main():
     }
 
     # Ressourcen laden (gecacht)
-    img_resolver = ImageResolver(prefer_local=PREFER_LOCAL_IMAGES, local_dir=LOCAL_IMAGES_DIR)
+    # --- IMAGE (dev): img_resolver = ImageResolver(...) ---
+    img_resolver = None
     doc_resolver = DocumentResolver(mode=DOC_ACCESS_MODE, products_dir=PRODUCTS_DIR)
 
     # Pfade als Strings für cached-Funktionen (Path ist nicht hashbar)
@@ -877,16 +806,17 @@ def main():
                     st.error(f"Azure-Aufruf fehlgeschlagen: {e}")
                     answer = error_msg
 
-                # 8) Karten-HTML + Quellen-Daten aufbauen
+                # 8) Quellen-Daten; Top-Referenzen für minimale Anzeige (keine Karten/Images)
                 cards_html = build_cards_html(topN, img_resolver)
                 sources_data = build_sources_data(topN, doc_resolver)
 
-                # 9) Karten + Quellen nach der gestreamten Antwort anzeigen
+                # 9) Minimal Ref-Liste + Quellen nach der gestreamten Antwort anzeigen
                 new_msg_idx = len(st.session_state.messages)
                 new_msg = {
                     "role": "assistant",
                     "content": answer,
                     "cards_html": cards_html,
+                    "top_refs": topN,
                     "sources": sources_data,
                 }
                 display_message_extras(new_msg, new_msg_idx)
